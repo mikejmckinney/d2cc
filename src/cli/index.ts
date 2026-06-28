@@ -149,4 +149,12 @@ program
     process.exit(report.exitCode);
   });
 
+program
+  .command("mcp")
+  .description("Start MCP server for agent integration (stdio transport)")
+  .action(async () => {
+    const { startMcpServer } = await import("../mcp/index.js");
+    await startMcpServer();
+  });
+
 program.parse();

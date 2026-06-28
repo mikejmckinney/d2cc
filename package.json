@@ -16,7 +16,8 @@
     "./skeleton": "./dist/checks/skeleton/index.js",
     "./visual": "./dist/checks/visual/index.js",
     "./config": "./dist/core/config.js",
-    "./reporter": "./dist/core/reporter.js"
+    "./reporter": "./dist/core/reporter.js",
+    "./mcp": "./dist/mcp/index.js"
   },
   "files": [
     "dist",
@@ -28,6 +29,7 @@
     "build": "tsc",
     "dev": "tsc --watch",
     "test": "node --test __tests__/*.test.js",
+    "prepare": "npm run build",
     "prepublishOnly": "npm run build"
   },
   "engines": {
