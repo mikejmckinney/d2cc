@@ -1,0 +1,61 @@
+{
+  "name": "design-to-code-contract",
+  "version": "0.1.0",
+  "description": "Design-to-code contract enforcement. Prototypes are the source of truth; verify implementation matches.",
+  "license": "MIT",
+  "type": "module",
+  "bin": {
+    "d2cc": "./bin/d2cc.js"
+  },
+  "main": "./dist/core/index.js",
+  "types": "./dist/core/index.d.ts",
+  "exports": {
+    ".": "./dist/core/index.js",
+    "./css-sync": "./dist/checks/css-sync/index.js",
+    "./structural": "./dist/checks/structural/index.js",
+    "./skeleton": "./dist/checks/skeleton/index.js",
+    "./visual": "./dist/checks/visual/index.js",
+    "./config": "./dist/core/config.js",
+    "./reporter": "./dist/core/reporter.js"
+  },
+  "files": [
+    "dist",
+    "bin",
+    "README.md",
+    "LICENSE"
+  ],
+  "scripts": {
+    "build": "tsc",
+    "dev": "tsc --watch",
+    "test": "node --test __tests__/*.test.js",
+    "prepublishOnly": "npm run build"
+  },
+  "engines": {
+    "node": ">=18"
+  },
+  "dependencies": {
+    "commander": "^13.0.0"
+  },
+  "devDependencies": {
+    "@types/node": "^22.0.0",
+    "typescript": "^5.7.0"
+  },
+  "peerDependencies": {
+    "@playwright/test": ">=1.40.0"
+  },
+  "peerDependenciesMeta": {
+    "@playwright/test": {
+      "optional": true
+    }
+  },
+  "keywords": [
+    "design",
+    "code",
+    "contract",
+    "prototype",
+    "enforcement",
+    "visual-regression",
+    "css-sync",
+    "design-system"
+  ]
+}
