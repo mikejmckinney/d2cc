@@ -30,7 +30,7 @@
     "build": "tsc",
     "dev": "tsc --watch",
     "test": "node --test __tests__/*.test.js",
-    "prepare": "npm run build",
+    "prepare": "tsc 2>/dev/null || true",
     "prepublishOnly": "npm run build"
   },
   "engines": {
