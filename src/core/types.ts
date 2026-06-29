@@ -84,6 +84,11 @@ export interface ContractConfig {
     enabled?: boolean;
     /** Dev server URL */
     serverUrl?: string;
+    /** Command to start the dev server (e.g. "npm run dev"). If set, d2cc
+     *  starts the server automatically when it's not already running. */
+    devCommand?: string;
+    /** Milliseconds to wait for dev server to be ready (default: 30000) */
+    serverTimeout?: number;
     /** Viewport widths to capture */
     viewports?: Array<{ name: string; width: number; height: number }>;
     /** Output directory for screenshots */

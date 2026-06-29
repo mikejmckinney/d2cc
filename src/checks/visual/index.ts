@@ -5,7 +5,7 @@
 
 import { readFileSync, existsSync, mkdirSync, readdirSync } from "node:fs";
 import { resolve, join } from "node:path";
-import { execSync } from "node:child_process";
+import { execSync, spawn, type ChildProcess } from "node:child_process";
 import type { ContractConfig } from "../../core/types.js";
 import { check, suite } from "../../core/reporter.js";
 import type { SuiteResult } from "../../core/types.js";
@@ -54,6 +54,15 @@ function waitForServer(url: string, timeoutMs: number): boolean {
     }
   }
   return false;
+}
+
+/**
+ * Parse a shell command string into [command, args[]].
+ * Handles "npm run dev", "npx vite --port 5173", etc.
+ */
+function parseCommand(cmd: string): [string, string[]] {
+  const parts = cmd.trim().split(/\s+/);
+  return [parts[0], parts.slice(1)];
 }
 
 /**
@@ -200,6 +209,8 @@ export function runVisual(
     config.visual?.outputDir ?? "visual-regression",
   );
   const serverUrl = config.visual?.serverUrl ?? "http://localhost:5173";
+  const devCommand = config.visual?.devCommand;
+  const serverTimeout = config.visual?.serverTimeout ?? 30000;
   const viewports = config.visual?.viewports ?? [
     { name: "desktop", width: 940, height: 800 },
     { name: "mobile", width: 390, height: 844 },
@@ -215,7 +226,7 @@ export function runVisual(
 
   const checks = [];
   const screenshotsTaken: string[] = [];
-  let startedServer = false;
+  let startedServer: ChildProcess | null = null;
   let serverReady = false;
 
   // 1. Screenshots (if Playwright available)
@@ -225,18 +236,19 @@ export function runVisual(
       execSync(`curl -s --connect-timeout 2 "${serverUrl}"`, { stdio: "ignore" });
       serverReady = true;
     } catch {
-      // Server not running — try to start it
-      try {
-        const devProc = require("node:child_process").spawn(
-          "npm",
-          ["run", "dev"],
-          { cwd: projectRoot, stdio: "ignore", detached: true },
-        );
-        devProc.unref();
-        startedServer = true;
-        serverReady = waitForServer(serverUrl, 30000);
-      } catch {
-        // Failed to start server
+      // Server not running — try to start it via devCommand
+      if (devCommand) {
+        const [cmd, args] = parseCommand(devCommand);
+        try {
+          startedServer = spawn(cmd, args, {
+            cwd: projectRoot,
+            stdio: "ignore",
+            detached: true,
+          });
+          serverReady = waitForServer(serverUrl, serverTimeout);
+        } catch {
+          // Failed to start server
+        }
       }
     }
 
@@ -279,12 +291,15 @@ export function runVisual(
         );
       }
     } else {
+      const hint = devCommand
+        ? `Dev server not available at ${serverUrl} — tried: ${devCommand}`
+        : `Dev server not available at ${serverUrl} — set visual.devCommand in config or start the server manually`;
       checks.push(
         check(
           "visual:screenshots",
           checkName,
           false,
-          `Dev server not available at ${serverUrl} — screenshots skipped`,
+          hint,
           "warning",
         ),
       );
@@ -325,8 +340,13 @@ export function runVisual(
   );
 
   // Clean up server if we started it
-  if (startedServer && serverReady) {
-    // Note: the actual process cleanup happens via the CLI wrapper
+  if (startedServer) {
+    try {
+      startedServer.kill("SIGTERM");
+      if (startedServer.pid) {
+        try { process.kill(-startedServer.pid, "SIGTERM"); } catch { /* already dead */ }
+      }
+    } catch { /* already dead */ }
   }
 
   return suite(checkName, checks);
