@@ -4,29 +4,34 @@
 import { readFileSync, writeFileSync, existsSync } from "node:fs";
 import { resolve } from "node:path";
 import { check, suite } from "../../core/reporter.js";
-/** Default section patterns for common prototype structures */
+/** Default section patterns for common prototype structures.
+ *  Patterns use a lazy match to the next matching closing tag of the same
+ *  element type. The `s` (dotAll) flag lets `.` match newlines. */
 const DEFAULT_SECTIONS = [
-    { name: "Header", pattern: '(<header class="header".*?</header>)' },
+    { name: "Header", pattern: '(<header\\s+class="header"[\\s\\S]*?</header>)' },
     {
         name: "ReadinessHero",
-        pattern: '(<div class="readiness-hero".*?</div>\\s*</div>\\s*</div>)',
+        pattern: '(<section\\s+class="readiness-hero"[\\s\\S]*?</section>)',
     },
     {
         name: "QuickStartGrid",
-        pattern: '(<div class="qs-grid".*?</div>\\s*</div>)',
+        pattern: '(<div\\s+class="quickstart-grid"[\\s\\S]*?</div>\\s*</div>)',
     },
     {
         name: "CategoryBreakdown",
-        pattern: '(<div class="cat-section".*?</div>\\s*</div>\\s*</div>)',
+        pattern: '(<div\\s+class="two-col"[\\s\\S]*?</div>)',
     },
     {
         name: "AmIReadyInsights",
-        pattern: '(<div class="insights".*?</div>\\s*</div>\\s*</div>)',
+        pattern: '(<div\\s+class="insight-list"[\\s\\S]*?</div>)',
     },
-    { name: "StudyPlan", pattern: '(<div class="plan-card".*?</div>\\s*</div>)' },
+    {
+        name: "StudyPlan",
+        pattern: '(<section\\s+class="plan-section"[\\s\\S]*?</section>)',
+    },
     {
         name: "SessionHistory",
-        pattern: '(<div class="history-card".*?</div>\\s*</div>\\s*</div>)',
+        pattern: '(<section\\s+class="history-section"[\\s\\S]*?</section>)',
     },
 ];
 /**
