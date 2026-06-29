@@ -75,7 +75,7 @@ program
     suites.push(runCssSync(config, projectRoot));
     suites.push(runStructural(config, projectRoot));
     suites.push(runSkeleton(config, projectRoot));
-    suites.push(runVisual(config, projectRoot));
+    suites.push(await runVisual(config, projectRoot));
 
     const report = buildReport(suites);
 
@@ -142,7 +142,7 @@ program
   .action(async (opts: { project: string; json?: boolean }) => {
     const projectRoot = resolve(opts.project);
     const { config } = await loadConfig(projectRoot);
-    const result = runVisual(config, projectRoot);
+    const result = await runVisual(config, projectRoot);
     const report = buildReport([result]);
     if (opts.json) console.log(renderJSON(report));
     else console.log(renderText(report));

@@ -41,17 +41,29 @@ function hasImageMagick(): boolean {
 }
 
 /**
- * Wait for a dev server to be ready.
+ * Sleep for ms milliseconds.
  */
-function waitForServer(url: string, timeoutMs: number): boolean {
+function sleep(ms: number): Promise<void> {
+  return new Promise((r) => setTimeout(r, ms));
+}
+
+/**
+ * Wait for a dev server to be ready by polling with fetch.
+ * Uses async polling to give the spawned process room to start.
+ */
+async function waitForServer(
+  url: string,
+  timeoutMs: number,
+): Promise<boolean> {
   const start = Date.now();
   while (Date.now() - start < timeoutMs) {
     try {
-      execSync(`curl -s --connect-timeout 1 "${url}"`, { stdio: "ignore" });
-      return true;
+      const res = await fetch(url, { signal: AbortSignal.timeout(3000) });
+      if (res.status < 500) return true;
     } catch {
       // Server not ready yet
     }
+    await sleep(1000);
   }
   return false;
 }
@@ -192,10 +204,10 @@ function classInSource(
 /**
  * Run the visual diff check.
  */
-export function runVisual(
+export async function runVisual(
   config: ContractConfig,
   projectRoot: string,
-): SuiteResult {
+): Promise<SuiteResult> {
   const checkName = "Visual Regression";
 
   if (config.visual?.enabled === false) {
@@ -233,22 +245,29 @@ export function runVisual(
   if (hasPlaywright()) {
     // Check if server is already running
     try {
-      execSync(`curl -s --connect-timeout 2 "${serverUrl}"`, { stdio: "ignore" });
-      serverReady = true;
+      const res = await fetch(serverUrl, {
+        signal: AbortSignal.timeout(3000),
+      });
+      if (res.status < 500) serverReady = true;
     } catch {
       // Server not running — try to start it via devCommand
-      if (devCommand) {
-        const [cmd, args] = parseCommand(devCommand);
-        try {
-          startedServer = spawn(cmd, args, {
-            cwd: projectRoot,
-            stdio: "ignore",
-            detached: true,
-          });
-          serverReady = waitForServer(serverUrl, serverTimeout);
-        } catch {
-          // Failed to start server
+    }
+
+    if (!serverReady && devCommand) {
+      const [cmd, args] = parseCommand(devCommand);
+      try {
+        console.log(`  Starting dev server: ${devCommand}`);
+        startedServer = spawn(cmd, args, {
+          cwd: projectRoot,
+          stdio: "ignore",
+          detached: true,
+        });
+        serverReady = await waitForServer(serverUrl, serverTimeout);
+        if (serverReady) {
+          console.log(`  Dev server ready at ${serverUrl}`);
         }
+      } catch (e) {
+        console.error(`  Failed to start dev server: ${e}`);
       }
     }
 
@@ -342,11 +361,14 @@ export function runVisual(
   // Clean up server if we started it
   if (startedServer) {
     try {
-      startedServer.kill("SIGTERM");
+      // Kill the entire process group (negative PID)
       if (startedServer.pid) {
-        try { process.kill(-startedServer.pid, "SIGTERM"); } catch { /* already dead */ }
+        process.kill(-startedServer.pid, "SIGTERM");
       }
-    } catch { /* already dead */ }
+    } catch {
+      // Already dead
+    }
+    startedServer = null;
   }
 
   return suite(checkName, checks);
