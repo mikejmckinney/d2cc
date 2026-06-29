@@ -1,6 +1,6 @@
 # d2cc — Design-to-Code Contract Enforcement
 
-Prototypes are the source of truth. This tool verifies your React/Vue/Svelte implementation matches them.
+Prototypes are the source of truth. d2cc verifies your React/Vue/Svelte implementation matches them.
 
 ## Install
 
@@ -60,6 +60,8 @@ export default {
   visual: {
     enabled: true,
     serverUrl: "http://localhost:5173",
+    devCommand: "npm run dev",           // d2cc auto-starts the server if not running
+    serverTimeout: 30000,                // ms to wait for server readiness
     viewports: [
       { name: "desktop", width: 940, height: 800 },
       { name: "mobile", width: 390, height: 844 },
@@ -84,16 +86,40 @@ Extracts the HTML structure from prototype sections and generates a `component-s
 ### 4. Visual Regression (`d2cc visual`)
 Captures screenshots of both the prototype and your running dev server using Playwright, creates side-by-side comparisons, and diffs CSS class names between prototype and source. Requires `npx playwright install chromium`.
 
+**Auto-start**: If `devCommand` is set in config and the server isn't running, d2cc starts it automatically, waits for readiness, captures screenshots, then shuts it down. No manual server management needed.
+
 ## CI integration
 
 ```yaml
-# .github/workflows/contract.yml
+# .github/workflows/contract-verify.yml
+name: Contract Verification
+on:
+  push:
+    branches: [main, develop, "redesign/**"]
+  pull_request:
+
+jobs:
+  verify:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+      - run: npm ci
+      - run: npx playwright install --with-deps chromium
+      - run: npm run contract:verify
+```
+
+Exit code 0 = all checks pass. Exit code 1 = violations found.
+
+For JSON output in CI:
+
+```yaml
 - run: npx d2cc verify --json > contract-report.json
 - if: failure()
   run: cat contract-report.json
 ```
-
-Exit code 0 = all checks pass. Exit code 1 = violations found.
 
 ## API usage
 
@@ -106,29 +132,18 @@ const report = buildReport(suites);
 console.log(renderText(report));
 ```
 
+Individual check modules are also importable:
+
+```ts
+import { runCssSync } from "design-to-code-contract/css-sync";
+import { runStructural } from "design-to-code-contract/structural";
+import { runSkeleton } from "design-to-code-contract/skeleton";
+import { runVisual } from "design-to-code-contract/visual";
+```
+
 ## How it works
 
 The prototype HTML file is the single source of truth. d2cc extracts CSS classes, markup structure, and visual patterns from it, then verifies your implementation code matches. No intermediate manifest to maintain — the enforcement scripts read directly from the prototype.
-
-## Why d2cc?
-
-Existing design QA tools solve adjacent problems, but none enforce **prototype-to-implementation fidelity** — the gap where "the agent built something that doesn't look like the mockup."
-
-| Tool | What it checks | Prototype enforcement? | Complementary to d2cc? |
-|---|---|---|---|
-| **deslint** | Design token compliance (colors, spacing, radius) | No — lints code against your token system, not against a prototype | Yes — use alongside for token hygiene |
-| **Playwright `toHaveScreenshot()`** | Pixel diff against prior screenshots | No — compares current vs previous build, not current vs prototype | Yes — d2cc can wrap it for prototype-vs-impl screenshots |
-| **BackstopJS** | Pixel diff via Resemble.js with HTML reports | No — same as Playwright, previous-vs-current | Yes — better reporting UX |
-| **Chromatic / Percy** | Cloud visual regression on Storybook stories | No — compares renders across branches, not code against a prototype | Yes — for Storybook-first teams |
-| **Storybook Visual Tests** | Pixel diff per story | No — treats stories as the spec | Yes — component-level complement |
-| **@axe-core/playwright** | WCAG accessibility violations | No — accessibility only | Yes — adds the a11y enforcement axis |
-| **Code Connect (Figma)** | Code snippets in Figma Dev Mode | One-way — suggests code from design, doesn't verify code matches | Yes — solves the inverse direction |
-| **Fidel** | Deployed page vs Figma spec (0-100 score) | Closest — but operates on deployed pages, not CI/code | Adjacent — cloud service, not CI-native |
-| **compare-html** | Structured HTML diff with path tracking | Yes — structural diff primitive | Library — d2cc could depend on it |
-
-**d2cc's unique value:** extracts CSS classes, markup structure, and patterns directly from the prototype HTML and verifies the implementation matches. No intermediate manifest, no manual reference screenshots, no cloud service. Runs in CI with exit code 0/1.
-
-**d2cc does not replace** Playwright, deslint, axe-core, or Chromatic. It fills the one gap they all share: nobody checks that the code matches the prototype.
 
 ## MCP Server
 
@@ -150,6 +165,128 @@ Available tools:
 - `d2cc_css_sync` — check CSS class sync only
 - `d2cc_structural` — check structural verification only
 - `d2cc_skeleton` — extract component skeletons from prototype
+
+## Why d2cc?
+
+Existing design QA tools solve adjacent problems, but none enforce **prototype-to-implementation fidelity** — the gap where "the agent built something that doesn't look like the mockup."
+
+| Tool | What it checks | Prototype enforcement? | Complementary to d2cc? |
+|---|---|---|---|
+| **deslint** | Design token compliance (colors, spacing, radius) | No — lints code against your token system, not against a prototype | Yes — use alongside for token hygiene |
+| **Playwright `toHaveScreenshot()`** | Pixel diff against prior screenshots | No — compares current vs previous build, not current vs prototype | Yes — d2cc can wrap it for prototype-vs-impl screenshots |
+| **BackstopJS** | Pixel diff via Resemble.js with HTML reports | No — same as Playwright, previous-vs-current | Yes — better reporting UX |
+| **Chromatic / Percy** | Cloud visual regression on Storybook stories | No — compares renders across branches, not code against a prototype | Yes — for Storybook-first teams |
+| **Storybook Visual Tests** | Pixel diff per story | No — treats stories as the spec | Yes — component-level complement |
+| **@axe-core/playwright** | WCAG accessibility violations | No — accessibility only | Yes — adds the a11y enforcement axis |
+| **Code Connect (Figma)** | Code snippets in Figma Dev Mode | One-way — suggests code from design, doesn't verify code matches | Yes — solves the inverse direction |
+| **Fidel** | Deployed page vs Figma spec (0-100 score) | Closest — but operates on deployed pages, not CI/code | Adjacent — cloud service, not CI-native |
+| **compare-html** | Structured HTML diff with path tracking | Yes — structural diff primitive | Library — d2cc could depend on it |
+
+**d2cc's unique value:** extracts CSS classes, markup structure, and patterns directly from the prototype HTML and verifies the implementation matches. No intermediate manifest, no manual reference screenshots, no cloud service. Runs in CI with exit code 0/1.
+
+**d2cc does not replace** Playwright, deslint, axe-core, or Chromatic. It fills the one gap they all share: nobody checks that the code matches the prototype.
+
+## Architecture decisions
+
+### Why monolithic, not modular?
+
+d2cc was evaluated against two packaging strategies:
+
+**Option A — Modular packages per subsystem:**
+```
+@scope/core          # shared types, config schema, contract model
+@scope/css-sync      # CSS class extraction + token matching
+@scope/structural    # HTML/DOM structural diff
+@scope/skeleton      # skeleton/placeholder enforcement
+@scope/visual        # visual regression orchestration
+@scope/cli           # thin wrapper composing the above
+```
+
+**Option B — Monolithic package with internal modules:**
+```
+design-to-code-contract/
+├── src/core/        # types, config, reporter
+├── src/checks/      # css-sync, structural, skeleton, visual
+├── src/mcp/         # MCP server
+└── src/cli/         # CLI entry point
+```
+
+**We chose Option B (monolithic).** Here's why:
+
+| Factor | Modular (A) | Monolithic (B) |
+|---|---|---|
+| **Setup overhead** | 6 packages, 6 `package.json`s, 6 publish configs, workspace orchestration | 1 package, 1 publish, 1 config |
+| **Independent versioning** | Each check can version separately | All checks share one version |
+| **Tree-shaking** | Consumers import only what they need | Same — ESM `exports` map provides sub-path imports (`d2cc/css-sync`) |
+| **Independent consumption** | Can use `@scope/css-sync` without the CLI | Sub-path exports achieve the same: `import { runCssSync } from "design-to-code-contract/css-sync"` |
+| **Team ownership** | Clear boundaries for multi-team contribution | Single codebase, single PR flow |
+| **Cross-check dependencies** | Need to publish `@scope/core` before others can depend on it | Direct relative imports |
+| **Release coordination** | 6 independent release pipelines, version compatibility matrix | 1 pipeline, atomic releases |
+
+**The decisive factor:** at the current scale (1 project, 1 contributor, 4 checks), the overhead of 6 packages vastly outweighs the benefits. The sub-path exports pattern (`"exports"` field in `package.json`) gives consumers the same import ergonomics as modular packages without the coordination cost:
+
+```ts
+// These all work from a single installed package:
+import { loadConfig } from "design-to-code-contract";        // core
+import { runCssSync } from "design-to-code-contract/css-sync";
+import { runStructural } from "design-to-code-contract/structural";
+import { runSkeleton } from "design-to-code-contract/skeleton";
+import { runVisual } from "design-to-code-contract/visual";
+```
+
+### When to split into modular packages
+
+If d2cc grows beyond 3 active projects or multiple contributors, the modular approach becomes worth the overhead. The trigger points:
+
+| Signal | Action |
+|---|---|
+| 3+ projects actively using d2cc | Split `css-sync` and `structural` into separate packages — they have no shared deps beyond `core` |
+| Different teams own different checks | Split each check into its own package with `@scope/core` as a shared dependency |
+| Checks need different release cadences | Modular packages with independent semver |
+| External contributors want to add checks | Plugin architecture (see below) |
+
+### Future architecture: plugin system
+
+The long-term shape if d2cc grows:
+
+```
+design-to-code-contract/          # core + CLI (thin)
+├── src/core/                     # types, config, reporter, plugin API
+├── src/cli/                      # CLI entry point
+├── src/mcp/                      # MCP server
+└── plugins/
+    ├── css-sync/                 # built-in plugin
+    ├── structural/               # built-in plugin
+    ├── skeleton/                 # built-in plugin
+    └── visual/                   # built-in plugin
+
+# Third-party plugins:
+@scope/d2cc-a11y                  # accessibility check
+@scope/d2cc-tokens                # design token extraction
+@scope/d2cc-figma                 # Figma API integration
+```
+
+The plugin API would expose:
+
+```ts
+interface D2ccPlugin {
+  name: string;
+  check(config: ContractConfig, projectRoot: string): Promise<SuiteResult>;
+}
+```
+
+Config would accept plugins:
+
+```js
+export default {
+  plugins: [
+    "@scope/d2cc-a11y",
+    ["@scope/d2cc-figma", { figmaToken: "..." }],
+  ],
+};
+```
+
+This preserves the monolithic core while allowing community extensions. The plugin interface is simple enough that splitting built-in checks into separate packages later is a mechanical refactor, not a redesign.
 
 ## License
 
