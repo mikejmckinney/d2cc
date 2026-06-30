@@ -94,6 +94,23 @@ export interface ContractConfig {
         outputDir?: string;
         /** Classes to skip in DOM diff */
         skipClasses?: string[];
+        /** Screens to capture. Each screen navigates via text clicks.
+         *  Supports multi-step navigation via 'steps' array. */
+        screens?: Array<{
+            name: string;
+            navText?: string;
+            steps?: Array<{
+                click?: string | string[];
+                waitFor?: string | string[];
+                waitForText?: string;
+                wait?: number;
+                dismiss?: string;
+                seedIdb?: boolean;
+                reload?: boolean;
+                clickExactButton?: string;
+            }>;
+            reloadBeforeCapture?: boolean;
+        }>;
     };
     /** Global skip list — classes exempt from all checks */
     globalSkipList?: string[];

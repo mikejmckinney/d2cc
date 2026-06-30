@@ -1,15 +1,18 @@
 import type { ContractConfig } from "../../core/types.js";
 import type { SuiteResult } from "../../core/types.js";
-/**
- * Extract CSS class selectors from a prototype HTML file's <style> blocks.
- */
 export declare function extractPrototypeClasses(protoPath: string): string[];
-/**
- * Check if a CSS class is defined in the implementation CSS file.
- */
+export declare function extractPrototypeClassNames(protoPath: string): string[];
+export interface InlineToken {
+    name: string;
+    value: string;
+    source: "inline-attr" | "js-object";
+}
+export declare function extractInlineTokens(protoPath: string): InlineToken[];
+export declare function extractJsThemeTokens(protoPath: string): Record<string, InlineToken[]>;
 export declare function classExistsInCss(className: string, cssPath: string): boolean;
-/**
- * Run the CSS Sync check.
- */
+export declare function tokenExistsInCss(tokenName: string, expectedValue: string, cssPath: string, selectorBlock?: string): {
+    exists: boolean;
+    actualValue: string | null;
+};
 export declare function runCssSync(config: ContractConfig, projectRoot: string): SuiteResult;
 //# sourceMappingURL=index.d.ts.map
