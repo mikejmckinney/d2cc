@@ -197,16 +197,19 @@ export async function startMcpServer(): Promise<void> {
   process.stdin.setEncoding("utf-8");
   process.stdin.resume();
 
+  // Save the real stdout write before overriding — MCP responses must go to stdout
+  const realStdoutWrite = process.stdout.write.bind(process.stdout);
+
   process.stdout.write = (chunk: string | Uint8Array): boolean => {
     const str = typeof chunk === "string" ? chunk : new TextDecoder().decode(chunk);
     process.stderr.write(`[d2cc-mcp] tx: ${str.trimEnd()}\n`);
-    return process.stderr.write(chunk);
+    return realStdoutWrite(chunk);
   };
 
   const send = (response: JsonRpcResponse): void => {
     const msg = JSON.stringify(response);
     const body = `Content-Length: ${Buffer.byteLength(msg)}\r\n\r\n${msg}`;
-    process.stderr.write(body);
+    realStdoutWrite(body);
   };
 
   const handleRequest = async (req: JsonRpcRequest): Promise<void> => {
