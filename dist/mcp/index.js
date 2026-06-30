@@ -8,11 +8,12 @@ import { loadConfig, renderJSON, buildReport, } from "../core/index.js";
 import { runCssSync } from "../checks/css-sync/index.js";
 import { runStructural } from "../checks/structural/index.js";
 import { runSkeleton } from "../checks/skeleton/index.js";
+import { runVisual } from "../checks/visual/index.js";
 // ── Tool definitions ───────────────────────────────────────────────
 const TOOLS = [
     {
         name: "d2cc_verify",
-        description: "Run all design-to-code contract checks (CSS sync + structural + skeleton). " +
+        description: "Run all design-to-code contract checks (CSS sync + structural + skeleton + visual). " +
             "Returns structured results showing which checks passed/failed. " +
             "The prototype HTML file is the source of truth.",
         inputSchema: {
@@ -31,8 +32,9 @@ const TOOLS = [
     },
     {
         name: "d2cc_css_sync",
-        description: "Check that every CSS class from the prototype's <style> block exists " +
-            "in the implementation CSS file. Catches CSS drift.",
+        description: "Check that CSS custom properties and class selectors from the prototype " +
+            "match the implementation CSS. Extracts from style blocks, inline style attributes, " +
+            "and JS THEME objects. Catches CSS drift and token mismatches.",
         inputSchema: {
             type: "object",
             properties: {
@@ -71,9 +73,24 @@ const TOOLS = [
             },
         },
     },
+    {
+        name: "d2cc_visual",
+        description: "Capture screenshots of prototype and implementation using Playwright, " +
+            "navigate through configured screens with multi-step sequences, " +
+            "and generate side-by-side comparisons. Requires Playwright chromium.",
+        inputSchema: {
+            type: "object",
+            properties: {
+                project: {
+                    type: "string",
+                    description: "Project root directory (defaults to cwd)",
+                },
+            },
+        },
+    },
 ];
 // ── Tool execution ─────────────────────────────────────────────────
-async function runCheck(checkName, projectRoot) {
+async function runCheck(checkName, projectRoot, args) {
     let config;
     try {
         const result = await loadConfig(projectRoot);
@@ -90,6 +107,8 @@ async function runCheck(checkName, projectRoot) {
             suites.push(runCssSync(config, projectRoot));
             suites.push(runStructural(config, projectRoot));
             suites.push(runSkeleton(config, projectRoot));
+            if (!(args?.skipVisual))
+                suites.push(await runVisual(config, projectRoot));
             break;
         case "d2cc_css_sync":
             suites.push(runCssSync(config, projectRoot));
@@ -99,6 +118,9 @@ async function runCheck(checkName, projectRoot) {
             break;
         case "d2cc_skeleton":
             suites.push(runSkeleton(config, projectRoot));
+            break;
+        case "d2cc_visual":
+            suites.push(await runVisual(config, projectRoot));
             break;
         default:
             return JSON.stringify({ error: `Unknown tool: ${checkName}` });
@@ -154,7 +176,7 @@ export async function startMcpServer() {
                 }
                 const args = params.arguments ?? {};
                 const projectRoot = resolve(args.project ?? process.cwd());
-                const result = await runCheck(params.name, projectRoot);
+                const result = await runCheck(params.name, projectRoot, args);
                 const parsed = JSON.parse(result);
                 // Format as MCP tool response
                 const totalPassed = parsed.totalPassed ?? 0;

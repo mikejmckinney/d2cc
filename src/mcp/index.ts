@@ -14,6 +14,7 @@ import {
 import { runCssSync } from "../checks/css-sync/index.js";
 import { runStructural } from "../checks/structural/index.js";
 import { runSkeleton } from "../checks/skeleton/index.js";
+import { runVisual } from "../checks/visual/index.js";
 import type { SuiteResult, ContractConfig } from "../core/types.js";
 
 // ── MCP protocol helpers ───────────────────────────────────────────
@@ -44,7 +45,7 @@ const TOOLS: McpTool[] = [
   {
     name: "d2cc_verify",
     description:
-      "Run all design-to-code contract checks (CSS sync + structural + skeleton). " +
+      "Run all design-to-code contract checks (CSS sync + structural + skeleton + visual). " +
       "Returns structured results showing which checks passed/failed. " +
       "The prototype HTML file is the source of truth.",
     inputSchema: {
@@ -64,8 +65,9 @@ const TOOLS: McpTool[] = [
   {
     name: "d2cc_css_sync",
     description:
-      "Check that every CSS class from the prototype's <style> block exists " +
-      "in the implementation CSS file. Catches CSS drift.",
+      "Check that CSS custom properties and class selectors from the prototype " +
+      "match the implementation CSS. Extracts from style blocks, inline style attributes, " +
+      "and JS THEME objects. Catches CSS drift and token mismatches.",
     inputSchema: {
       type: "object" as const,
       properties: {
@@ -106,6 +108,22 @@ const TOOLS: McpTool[] = [
       },
     },
   },
+  {
+    name: "d2cc_visual",
+    description:
+      "Capture screenshots of prototype and implementation using Playwright, " +
+      "navigate through configured screens with multi-step sequences, " +
+      "and generate side-by-side comparisons. Requires Playwright chromium.",
+    inputSchema: {
+      type: "object" as const,
+      properties: {
+        project: {
+          type: "string",
+          description: "Project root directory (defaults to cwd)",
+        },
+      },
+    },
+  },
 ];
 
 // ── Tool execution ─────────────────────────────────────────────────
@@ -113,6 +131,7 @@ const TOOLS: McpTool[] = [
 async function runCheck(
   checkName: string,
   projectRoot: string,
+  args?: Record<string, unknown>,
 ): Promise<string> {
   let config: ContractConfig;
   try {
@@ -131,6 +150,7 @@ async function runCheck(
       suites.push(runCssSync(config, projectRoot));
       suites.push(runStructural(config, projectRoot));
       suites.push(runSkeleton(config, projectRoot));
+      if (!(args?.skipVisual)) suites.push(await runVisual(config, projectRoot));
       break;
     case "d2cc_css_sync":
       suites.push(runCssSync(config, projectRoot));
@@ -140,6 +160,9 @@ async function runCheck(
       break;
     case "d2cc_skeleton":
       suites.push(runSkeleton(config, projectRoot));
+      break;
+    case "d2cc_visual":
+      suites.push(await runVisual(config, projectRoot));
       break;
     default:
       return JSON.stringify({ error: `Unknown tool: ${checkName}` });
@@ -209,7 +232,7 @@ export async function startMcpServer(): Promise<void> {
         }
         const args = params.arguments ?? {};
         const projectRoot = resolve((args.project as string) ?? process.cwd());
-        const result = await runCheck(params.name, projectRoot);
+        const result = await runCheck(params.name, projectRoot, args);
         const parsed = JSON.parse(result) as Record<string, unknown>;
 
         // Format as MCP tool response
