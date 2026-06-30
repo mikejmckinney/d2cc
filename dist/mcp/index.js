@@ -147,9 +147,8 @@ export async function startMcpServer() {
     process.stdin.setEncoding("utf-8");
     process.stdin.resume();
     const send = (response) => {
-        const msg = JSON.stringify(response);
-        const body = `Content-Length: ${Buffer.byteLength(msg)}\r\n\r\n${msg}`;
-        process.stdout.write(body);
+        const msg = JSON.stringify(response) + "\n";
+        process.stdout.write(msg);
     };
     const handleRequest = async (req) => {
         switch (req.method) {

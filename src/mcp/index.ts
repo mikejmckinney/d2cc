@@ -198,9 +198,8 @@ export async function startMcpServer(): Promise<void> {
   process.stdin.resume();
 
   const send = (response: JsonRpcResponse): void => {
-    const msg = JSON.stringify(response);
-    const body = `Content-Length: ${Buffer.byteLength(msg)}\r\n\r\n${msg}`;
-    process.stdout.write(body);
+    const msg = JSON.stringify(response) + "\n";
+    process.stdout.write(msg);
   };
 
   const handleRequest = async (req: JsonRpcRequest): Promise<void> => {
