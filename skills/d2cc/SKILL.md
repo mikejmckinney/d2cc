@@ -136,7 +136,7 @@ screens: [
 
   // With data injection and reload
   { name: "results", steps: [
-    { seedIdb: true },    // inject test data into IndexedDB (React only)
+    { custom: "seed-idb" },  // run project-defined seed script via customStepFiles
     { reload: true },     // reload page (both platforms)
     { click: "Progress" },
     { wait: 2000 },
@@ -166,8 +166,9 @@ screens: [
 | `waitForText` | `string` | Wait for text to appear on page. |
 | `wait` | `number` | Wait N milliseconds. |
 | `dismiss` | `string` | Dismiss a modal overlay by clicking a button with this text. |
-| `seedIdb` | `boolean` | Inject seed data into IndexedDB. **Project-specific** — only works on React/IndexedDB apps, no-op on prototype. |
-| `reload` | `boolean` | Reload the page. Use after `seedIdb` to pick up seeded data. |
+| `seedIdb` | `boolean` | DEPRECATED — use `custom` step with `customStepFiles` instead. |
+| `custom` | `string` | Run a project-defined step. Value matches a key in `visual.customStepFiles`. The referenced JS file is read and evaluated in browser context via `page.evaluate()`. Skipped silently on prototype side. |
+| `reload` | `boolean` | Reload the page. Use after `custom` seed steps to pick up injected data. |
 
 ## Interpreting results
 
@@ -178,7 +179,7 @@ screens: [
 | Prototype section not found | Update the regex pattern in config `skeleton.sections` |
 | Button click matches wrong element | Use `clickExactButton` for exact match, or array fallback selectors |
 | Screenshots not captured | Run `npx playwright install chromium`, ensure dev server is running |
-| `seedIdb` has no effect | Only works on React/IndexedDB apps. Prototype uses localStorage. |
+| `seedIdb` has no effect | `seedIdb` is deprecated. Use `custom` step with `customStepFiles` instead. |
 | Button not visible after reload | Prototype runtime may need more time. Increase wait after reload step. |
 
 ## Comparisons

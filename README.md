@@ -110,7 +110,7 @@ visual: {
       { wait: 3000 },
     ]},
     { name: "results", steps: [
-      { seedIdb: true },                                       // inject test data (React only)
+      { custom: "seed-idb" },                                  // run project-defined seed script
       { reload: true },                                        // reload page (both platforms)
       { click: "Progress" },
       { wait: 2000 },
@@ -132,8 +132,8 @@ visual: {
 | `waitForText` | `string` | Wait for text to appear on page. |
 | `wait` | `number` | Wait N milliseconds. |
 | `dismiss` | `string` | Dismiss a modal overlay by clicking a button with this text. |
-| `seedIdb` | `boolean` | Inject seed data into IndexedDB (React only, no-op on prototype). |
-| `reload` | `boolean` | Reload the page (both platforms). Use after `seedIdb` to pick up seeded data. |
+| `custom` | `string` | Run a project-defined step. Value matches a key in `visual.customStepFiles`. The referenced JS file is read and evaluated in browser context via `page.evaluate()`. Skipped silently on prototype side. |
+| `reload` | `boolean` | Reload the page (both platforms). Use after `custom` seed steps to pick up injected data. |
 
 **Comparisons:** Side-by-side images are generated using Playwright (renders both screenshots in an HTML page and captures the result). No ImageMagick required.
 

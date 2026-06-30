@@ -94,6 +94,11 @@ export interface ContractConfig {
         outputDir?: string;
         /** Classes to skip in DOM diff */
         skipClasses?: string[];
+        /** Custom step handler files. Maps logical names to JS file paths
+         *  (relative to project root). Each file contains a function body that
+         *  runs inside Playwright's page.evaluate(). Must return a Promise or void.
+         *  Use `{ custom: "name" }` in screen steps to invoke. */
+        customStepFiles?: Record<string, string>;
         /** Screens to capture. Each screen navigates via text clicks.
          *  Supports multi-step navigation via 'steps' array. */
         screens?: Array<{
@@ -105,9 +110,9 @@ export interface ContractConfig {
                 waitForText?: string;
                 wait?: number;
                 dismiss?: string;
-                seedIdb?: boolean;
                 reload?: boolean;
                 clickExactButton?: string;
+                custom?: string;
             }>;
             reloadBeforeCapture?: boolean;
         }>;

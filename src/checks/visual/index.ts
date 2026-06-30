@@ -23,9 +23,10 @@ interface NavStep {
   waitForText?: string;
   wait?: number;
   dismiss?: string;
-  seedIdb?: boolean;
   reload?: boolean;
   clickExactButton?: string;
+  /** Run a project-defined custom step. Value matches a key in visual.customStepFiles config. */
+  custom?: string;
 }
 
 interface ScreenDef {
@@ -110,7 +111,14 @@ async function clickElement(page: any, text: string, timeout = 10000): Promise<b
 }
 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
-async function executeStep(page: any, step: NavStep, url: string, isReact: boolean): Promise<boolean> {
+async function executeStep(
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  page: any,
+  step: NavStep,
+  url: string,
+  customStepFiles?: Record<string, string>,
+  projectRoot?: string,
+): Promise<boolean> {
   if (step.dismiss) {
     try {
       const btn = page.locator(`button:has-text("${step.dismiss}")`).first();
@@ -121,9 +129,29 @@ async function executeStep(page: any, step: NavStep, url: string, isReact: boole
     } catch { /* no modal */ }
   }
 
-  if (step.seedIdb && isReact) {
-    await seedIndexedDB(page);
-    await sleep(500);
+  if (step.custom) {
+    // Custom steps are project-specific — skip silently on prototype side
+    if (!customStepFiles || !projectRoot) {
+      return true;
+    }
+    const fileRel = customStepFiles[step.custom];
+    if (!fileRel) {
+      console.log(`    [visual] custom step "${step.custom}" not found in visual.customStepFiles`);
+      return false;
+    }
+    const fileAbs = resolve(projectRoot, fileRel);
+    if (!existsSync(fileAbs)) {
+      console.log(`    [visual] custom step file not found: ${fileAbs}`);
+      return false;
+    }
+    const fileContents = readFileSync(fileAbs, "utf-8");
+    try {
+      await page.evaluate(fileContents);
+      await sleep(500);
+    } catch (e: unknown) {
+      console.log(`    [visual] custom step "${step.custom}" failed: ${(e as Error).message?.slice(0, 200)}`);
+      return false;
+    }
   }
 
   if (step.reload) {
@@ -209,7 +237,8 @@ async function navigateAndCapture(
   viewportName: string,
   screen: ScreenDef,
   isFirstLoad: boolean,
-  isReact: boolean,
+  customStepFiles?: Record<string, string>,
+  projectRoot?: string,
 ): Promise<string | null> {
   const outPath = join(outputDir, `${prefix}-${viewportName}-${screen.name}.png`);
 
@@ -221,7 +250,7 @@ async function navigateAndCapture(
 
   const steps = screen.steps ?? (screen.navText ? [{ click: screen.navText }] : []);
   for (const step of steps) {
-    const ok = await executeStep(page, step, url, isReact);
+    const ok = await executeStep(page, step, url, customStepFiles, projectRoot);
     if (!ok) {
       console.log(`    [visual] step failed for "${screen.name}": ${JSON.stringify(step)}`);
       return null;
@@ -241,40 +270,6 @@ async function navigateAndCapture(
   await sleep(500);
   await page.screenshot({ path: outPath, fullPage: true });
   return outPath;
-}
-
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-async function seedIndexedDB(page: any): Promise<void> {
-  await page.evaluate(() => {
-    return new Promise<void>((resolve, reject) => {
-      const request = indexedDB.open("cctc-app", 1);
-      request.onerror = () => reject(new Error("Failed to open IndexedDB"));
-      request.onsuccess = () => {
-        const db = request.result;
-        const now = Date.now();
-        const day = 86400000;
-
-        const entries = [
-          { id: "seed-0", completedAt: new Date(now - 6 * 3 * day).toISOString(), settings: { blueprintId: "cctc-from-2026-07", questionSet: "standard", questionCount: 10, timed: true, timeMinutes: 30, showTimer: true, mode: "exam", includeDrafts: false, targetThreshold: 70 }, timeUsedSeconds: 1800, itemIds: [], items: [], answers: {}, flaggedForReview: [], result: { correct: 7, total: 10, percent: 70, estimatedPass: true, breakdown: [{ categoryId: "1", categoryLabel: "Education", correct: 2, total: 3 }, { categoryId: "2", categoryLabel: "Pre-transplant", correct: 3, total: 4 }, { categoryId: "3", categoryLabel: "Post-op", correct: 2, total: 3 }] } },
-          { id: "seed-1", completedAt: new Date(now - 3 * 3 * day).toISOString(), settings: { blueprintId: "cctc-from-2026-07", questionSet: "standard", questionCount: 10, timed: true, timeMinutes: 30, showTimer: true, mode: "exam", includeDrafts: false, targetThreshold: 70 }, timeUsedSeconds: 2400, itemIds: [], items: [], answers: {}, flaggedForReview: [], result: { correct: 8, total: 10, percent: 80, estimatedPass: true, breakdown: [{ categoryId: "1", categoryLabel: "Education", correct: 3, total: 3 }, { categoryId: "2", categoryLabel: "Pre-transplant", correct: 3, total: 4 }, { categoryId: "3", categoryLabel: "Post-op", correct: 2, total: 3 }] } },
-        ];
-
-        const flags = [
-          { id: "flag-seed-0", item_id: "cctc-1001", version: 1, status: "reviewed", reason: "typo / wording", comment: "Sample flag for visual testing", session_id: "seed-0", blueprint: "cctc-from-2026-07", mode: "exam", createdAt: new Date(now - 2 * day).toISOString(), updatedAt: new Date(now - 2 * day).toISOString() }
-        ];
-
-        const tx = db.transaction(["history", "flags"], "readwrite");
-        const historyStore = tx.objectStore("history");
-        const flagsStore = tx.objectStore("flags");
-
-        for (const entry of entries) { historyStore.put(entry); }
-        for (const flag of flags) { flagsStore.put(flag); }
-
-        tx.oncomplete = () => resolve();
-        tx.onerror = () => reject(new Error("Failed to seed IndexedDB"));
-      };
-    });
-  });
 }
 
 async function createComparison(
@@ -373,6 +368,7 @@ export async function runVisual(
     { name: "mobile", width: 390, height: 844 },
   ];
   const screens = config.visual?.screens ?? DEFAULT_SCREENS;
+  const customStepFiles = config.visual?.customStepFiles;
   const skipList = new Set([
     ...(config.globalSkipList ?? []),
     ...(config.visual?.skipClasses ?? []),
@@ -452,7 +448,7 @@ export async function runVisual(
         for (let i = 0; i < screens.length; i++) {
           const result = await navigateAndCapture(
             pPage, protoUrl, outputDir, "proto", vp.name,
-            screens[i], i === 0, false,
+            screens[i], i === 0,
           );
           if (result) screenshotsTaken.push(result);
         }
@@ -466,7 +462,7 @@ export async function runVisual(
         for (let i = 0; i < screens.length; i++) {
           const result = await navigateAndCapture(
             rPage, serverUrl, outputDir, "react", vp.name,
-            screens[i], i === 0, true,
+            screens[i], i === 0, customStepFiles, projectRoot,
           );
           if (result) screenshotsTaken.push(result);
         }
