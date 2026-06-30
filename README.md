@@ -75,7 +75,13 @@ export default {
 ## Four checks
 
 ### 1. CSS Sync (`d2cc css-sync`)
-Extracts CSS class selectors from the prototype's `<style>` blocks and verifies each exists in your implementation CSS. Catches CSS drift — when the prototype uses `.hero-card` but your code uses `.heroCard`.
+Extracts CSS styles from the prototype via three sources and verifies each matches in your implementation CSS:
+
+- **`<style>` block class selectors** — catches CSS class drift (prototype uses `.hero-card`, your code uses `.heroCard`)
+- **Inline `style="..."` attributes** — extracts CSS custom properties (`--var: value`) from inline styles and verifies they match `:root` in your CSS
+- **JS `THEME` objects** — extracts tokens from JavaScript theme objects (e.g., `const THEME = { day: {...}, night: {...} }`) and verifies day tokens match `:root` and night tokens match `[data-theme="night"]`
+
+All three sources run automatically in a single `css-sync` check. RGBA values are normalized for comparison (`rgba(255,253,249,.86)` == `rgba(255, 253, 249, 0.86)`).
 
 ### 2. Structural Verification (`d2cc structural`)
 Checks that specific files contain required CSS classes, that CSS tokens are defined in `:root`, that SVG paths match, and that naming conventions are followed. Configurable per-project.
@@ -84,7 +90,54 @@ Checks that specific files contain required CSS classes, that CSS tokens are def
 Extracts the HTML structure from prototype sections and generates a `component-skeletons.md` showing the exact markup your React components must reproduce.
 
 ### 4. Visual Regression (`d2cc visual`)
-Captures screenshots of both the prototype and your running dev server using Playwright, creates side-by-side comparisons, and diffs CSS class names between prototype and source. Requires `npx playwright install chromium`.
+Captures screenshots of both the prototype and your running dev server using Playwright's programmatic API, navigates through multiple screens, creates side-by-side comparisons, and diffs CSS class names between prototype and source. Requires `npx playwright install chromium`.
+
+**Multi-screen navigation:** Define screens in config with step sequences that click, wait, seed data, reload, and navigate through your app. Each screen captures a separate screenshot for both prototype and implementation.
+
+```js
+visual: {
+  screens: [
+    { name: "dashboard", navText: "Home" },                    // single click
+    { name: "setup", navText: "Setup" },
+    { name: "session", steps: [                                // multi-step
+      { click: "Home" },
+      { wait: 1000 },
+      { click: "Setup" },
+      { wait: 2000 },
+      { clickExactButton: "Study" },                           // exact role match
+      { wait: 1500 },
+      { click: "Start study" },
+      { wait: 3000 },
+    ]},
+    { name: "results", steps: [
+      { seedIdb: true },                                       // inject test data (React only)
+      { reload: true },                                        // reload page (both platforms)
+      { click: "Progress" },
+      { wait: 2000 },
+    ]},
+    { name: "session-study-reveal", steps: [
+      { waitFor: [".option-button", "button:has(span:text-is('A'))"] },  // fallback selectors
+      { click: [".option-button", "button:has(span:text-is('A'))"] },
+    ]},
+  ],
+}
+```
+
+**Step types:**
+| Step | Type | Description |
+|---|---|---|
+| `click` | `string \| string[]` | Click element by text/title/aria-label/CSS selector. Array = try each until one works. |
+| `clickExactButton` | `string` | Click button by exact role name (`getByRole('button', {name, exact: true})`). Handles whitespace normalization. |
+| `waitFor` | `string \| string[]` | Wait for element to appear. Array = try each. |
+| `waitForText` | `string` | Wait for text to appear on page. |
+| `wait` | `number` | Wait N milliseconds. |
+| `dismiss` | `string` | Dismiss a modal overlay by clicking a button with this text. |
+| `seedIdb` | `boolean` | Inject seed data into IndexedDB (React only, no-op on prototype). |
+| `reload` | `boolean` | Reload the page (both platforms). Use after `seedIdb` to pick up seeded data. |
+
+**Comparisons:** Side-by-side images are generated using Playwright (renders both screenshots in an HTML page and captures the result). No ImageMagick required.
+
+**Prototype HTTP serving:** Prototypes that load data via `<script src="...">` need HTTP serving (file:// blocks CORS). d2cc auto-starts `npx http-server` (fallback `python3 -m http.server`) on port 9876 to serve the prototype.
 
 **Auto-start**: If `devCommand` is set in config and the server isn't running, d2cc starts it automatically, waits for readiness, captures screenshots, then shuts it down. No manual server management needed.
 
