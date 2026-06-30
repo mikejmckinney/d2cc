@@ -1,0 +1,223 @@
+---
+name: d2cc
+description: Design-to-code contract enforcement — verify implementation matches a prototype HTML file. Use when working on UI/CSS changes, visual redesigns, or before PRs that touch styling or component structure.
+license: MIT
+---
+
+# d2cc — Design-to-Code Contract Enforcement
+
+d2cc verifies your implementation matches a prototype. The prototype is the source of truth.
+
+## Install
+
+```bash
+npm install -D design-to-code-contract
+npx playwright install chromium   # for visual checks
+```
+
+## When to use this skill
+
+Load this skill when:
+- Working on UI, CSS, or visual redesign tasks
+- After making changes to component styles or layout
+- Before opening a PR that touches styling
+- When the user asks to verify visual fidelity against a prototype
+
+## How to run
+
+```bash
+# Run all checks
+npx d2cc verify
+
+# Run individual checks
+npx d2cc css-sync      # CSS custom properties + class selectors
+npx d2cc structural    # required tokens, patterns, component classes
+npx d2cc skeleton      # HTML structure extraction from prototype
+npx d2cc visual        # multi-screen Playwright screenshots + comparisons
+```
+
+Use `-p <path>` to specify a project root (defaults to cwd):
+```bash
+npx d2cc verify -p /path/to/project
+```
+
+## Setup
+
+Run `npx d2cc init` to generate a `design-contract.config.js` in your project root, then customize it:
+
+```js
+export default {
+  prototype: "prototype.html",
+  implementation: {
+    src: "src",
+    css: "src/app.css",
+  },
+  cssSync: { enabled: true, skipList: [] },
+  structural: {
+    enabled: true,
+    requiredTokens: ["--bg", "--surface", "--ink", "--muted"],
+    patterns: {
+      "dark-mode": { file: "src/app.css", pattern: '[data-theme="night"]' },
+    },
+  },
+  skeleton: { enabled: true, output: "component-skeletons.md" },
+  visual: {
+    enabled: true,
+    serverUrl: "http://localhost:5173",
+    devCommand: "npm run dev",
+    viewports: [
+      { name: "desktop", width: 1280, height: 800 },
+      { name: "mobile", width: 390, height: 844 },
+    ],
+    outputDir: "visual-regression",
+    screens: [
+      { name: "dashboard", navText: "Home" },
+      { name: "setup", navText: "Setup" },
+    ],
+  },
+};
+```
+
+## What each check does
+
+### CSS Sync
+Extracts CSS from three sources in the prototype and compares against your implementation CSS:
+- **`<style>` block class selectors** — catches class name drift
+- **Inline `style="..."` attributes** — extracts CSS custom properties (`--var: value`) and verifies they match `:root`
+- **JS `THEME` objects** — extracts tokens from JavaScript theme objects and verifies day tokens match `:root`, night tokens match `[data-theme="night"]`
+
+RGBA values are normalized (`0.86` == `.86`).
+
+### Structural Verification
+Checks that required CSS tokens exist in `:root`, that patterns exist in source files, and that component files contain required CSS classes.
+
+### Skeleton Extraction
+Extracts HTML sections from the prototype using regex patterns and generates a `component-skeletons.md` showing the exact markup your components must reproduce.
+
+### Visual Regression
+Captures screenshots of both prototype and implementation using Playwright, navigates through configured screens with multi-step sequences, and generates side-by-side comparisons.
+
+Requires: `npx playwright install chromium`
+
+## Multi-screen visual config
+
+Define screens with step sequences in `design-contract.config.js`:
+
+```js
+screens: [
+  // Single click navigation
+  { name: "dashboard", navText: "Home" },
+
+  // Multi-step navigation
+  { name: "session", steps: [
+    { click: "Setup" },
+    { wait: 2000 },
+    { clickExactButton: "Study" },  // exact role name match
+    { click: "Start" },
+    { wait: 3000 },
+  ]},
+
+  // With data injection and reload
+  { name: "results", steps: [
+    { seedIdb: true },    // inject test data into IndexedDB (React only)
+    { reload: true },     // reload page (both platforms)
+    { click: "Progress" },
+    { wait: 2000 },
+  ]},
+
+  // Fallback selectors (try each until one works)
+  { name: "study-reveal", steps: [
+    { waitFor: [".option-button", "button:has(span:text-is('A'))"] },
+    { click: [".option-button", "button:has(span:text-is('A'))"] },
+  ]},
+
+  // Reload for clean state before capturing
+  { name: "progress", reloadBeforeCapture: true, steps: [
+    { click: "Progress" },
+    { wait: 2000 },
+  ]},
+],
+```
+
+### Step types
+
+| Step | Type | Description |
+|---|---|---|
+| `click` | `string \| string[]` | Click element by text, title, aria-label, or CSS selector. Array = try each until one works. |
+| `clickExactButton` | `string` | Click button by exact role name. Handles whitespace normalization. |
+| `waitFor` | `string \| string[]` | Wait for element to appear. Array = try each. |
+| `waitForText` | `string` | Wait for text to appear on page. |
+| `wait` | `number` | Wait N milliseconds. |
+| `dismiss` | `string` | Dismiss a modal overlay by clicking a button with this text. |
+| `seedIdb` | `boolean` | Inject seed data into IndexedDB (React only, no-op on prototype). |
+| `reload` | `boolean` | Reload the page. Use after `seedIdb` to pick up seeded data. |
+
+## Interpreting results
+
+| Failure | Fix |
+|---|---|
+| Token value mismatch | Update CSS custom property to match prototype value exactly |
+| `.class-name` not in CSS | Add the class to your CSS file, or add to `skipList` in config |
+| Prototype section not found | Update the regex pattern in config `skeleton.sections` |
+| Button click matches wrong element | Use `clickExactButton` for exact match, or array fallback selectors |
+| Screenshots not captured | Run `npx playwright install chromium`, ensure dev server is running |
+| `seedIdb` has no effect | Only works on React/IndexedDB apps. Prototype uses localStorage. |
+| Button not visible after reload | Prototype runtime may need more time. Increase wait after reload step. |
+
+## Comparisons
+
+Side-by-side images are generated using Playwright (renders both screenshots in an HTML page and captures the result). No ImageMagick required.
+
+## Prototype HTTP serving
+
+Prototypes that load data via `<script src="...">` need HTTP serving (file:// blocks CORS). d2cc auto-starts `npx http-server` (fallback `python3 -m http.server`) on port 9876 to serve the prototype.
+
+## CI integration
+
+```yaml
+# .github/workflows/contract-verify.yml
+- run: npx playwright install --with-deps chromium
+- run: npx d2cc verify
+```
+
+Exit code 0 = all checks pass. Exit code 1 = violations found.
+
+For JSON output:
+```yaml
+- run: npx d2cc verify --json > contract-report.json
+- if: failure()
+  run: cat contract-report.json
+```
+
+## MCP Server
+
+d2cc includes an MCP server for agent integration:
+
+```json
+{
+  "mcpServers": {
+    "d2cc": {
+      "command": "npx",
+      "args": ["d2cc", "mcp"]
+    }
+  }
+}
+```
+
+Available tools:
+- `d2cc_verify` — run all checks (CSS sync + structural + skeleton + visual)
+- `d2cc_css_sync` — CSS custom property and class sync
+- `d2cc_structural` — required tokens and patterns
+- `d2cc_skeleton` — HTML structure extraction
+- `d2cc_visual` — multi-screen Playwright screenshots
+
+## API usage
+
+```ts
+import { loadConfig, runCssSync, runVisual, buildReport, renderText } from "design-to-code-contract";
+
+const { config } = await loadConfig(process.cwd());
+const suites = [runCssSync(config, process.cwd()), await runVisual(config, process.cwd())];
+const report = buildReport(suites);
+console.log(renderText(report));
+```

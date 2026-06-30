@@ -214,10 +214,44 @@ d2cc includes an MCP server for agent integration. Agents can invoke verificatio
 ```
 
 Available tools:
-- `d2cc_verify` — run all checks, returns structured results
-- `d2cc_css_sync` — check CSS class sync only
-- `d2cc_structural` — check structural verification only
+- `d2cc_verify` — run all checks (CSS sync + structural + skeleton + visual)
+- `d2cc_css_sync` — CSS custom property and class sync
+- `d2cc_structural` — required tokens and patterns
 - `d2cc_skeleton` — extract component skeletons from prototype
+- `d2cc_visual` — multi-screen Playwright screenshots and comparisons
+
+## Agent Skills
+
+d2cc ships with a generic agent skill at `skills/d2cc/SKILL.md`. This gives AI coding agents (OpenCode, Claude Code, Cursor, etc.) workflow guidance for running, interpreting, and fixing d2cc findings.
+
+**To use with OpenCode:**
+
+Copy the skill into your project:
+```bash
+mkdir -p .opencode/skills/d2cc
+cp node_modules/design-to-code-contract/skills/d2cc/SKILL.md .opencode/skills/d2cc/
+```
+
+**To use with Claude Code:**
+```bash
+mkdir -p .claude/skills/d2cc
+cp node_modules/design-to-code-contract/skills/d2cc/SKILL.md .claude/skills/d2cc/
+```
+
+**To use with Cursor / other agents:**
+```bash
+mkdir -p .agents/skills/d2cc
+cp node_modules/design-to-code-contract/skills/d2cc/SKILL.md .agents/skills/d2cc/
+```
+
+The skill teaches agents:
+- When to run d2cc (after UI/CSS changes, before PRs)
+- How to interpret each check's results
+- How to fix common failures
+- Multi-screen visual config with step types
+- CI integration patterns
+
+**Customize the skill** after copying — add project-specific context (your prototype path, dev server command, skip lists) to the bottom of the file.
 
 ## Why d2cc?
 
