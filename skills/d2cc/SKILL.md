@@ -23,11 +23,28 @@ Load this skill when:
 - Before opening a PR that touches styling
 - When the user asks to verify visual fidelity against a prototype
 
+## Enforcement workflow
+
+The prototype is the single source of truth. The implementation must match it — not re-interpret it.
+
+Follow this workflow when implementing a redesign:
+
+1. **Read the prototype** before writing any component. Understand the markup structure, CSS classes, and token values.
+2. **Port CSS verbatim** — copy the prototype's `<style>` block into your implementation CSS as the first step. Do not write new CSS alongside new components.
+3. **Build components to match prototype markup** — the JSX must render the same HTML structure and class names the prototype uses. Translate, don't re-imagine.
+4. **Run `d2cc css-sync` after each component** to verify all prototype CSS classes are present in your implementation CSS. Fix drift immediately — do not defer.
+5. **Run `d2cc verify` before every commit** that touches styling, components, or layout. Exit code 0 = ship. Exit code 1 = fix before proceeding.
+
+**Failure policy: fix immediately, never defer.** A failing check means the implementation has drifted from the prototype. Do not commit, do not move to the next component, do not mark a task complete — fix the failure first. Deferred drift compounds into the exact visual mismatch d2cc is designed to prevent.
+
 ## How to run
 
 ```bash
 # Run all checks
 npx d2cc verify
+
+# Run all checks, output JSON (for CI or programmatic consumers)
+npx d2cc verify --json
 
 # Run individual checks
 npx d2cc css-sync      # CSS custom properties + class selectors
@@ -149,7 +166,7 @@ screens: [
 | `waitForText` | `string` | Wait for text to appear on page. |
 | `wait` | `number` | Wait N milliseconds. |
 | `dismiss` | `string` | Dismiss a modal overlay by clicking a button with this text. |
-| `seedIdb` | `boolean` | Inject seed data into IndexedDB (React only, no-op on prototype). |
+| `seedIdb` | `boolean` | Inject seed data into IndexedDB. **Project-specific** — only works on React/IndexedDB apps, no-op on prototype. |
 | `reload` | `boolean` | Reload the page. Use after `seedIdb` to pick up seeded data. |
 
 ## Interpreting results
