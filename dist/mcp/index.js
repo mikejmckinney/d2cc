@@ -13,9 +13,9 @@ import { runVisual } from "../checks/visual/index.js";
 const TOOLS = [
     {
         name: "d2cc_verify",
-        description: "Run all design-to-code contract checks (CSS sync + structural + skeleton + visual). " +
-            "Returns structured results showing which checks passed/failed. " +
-            "The prototype HTML file is the source of truth.",
+        description: "Run all design-to-code contract checks (CSS sync + structural + skeleton). " +
+            "Visual check is skipped by default (takes 5-10min). Use d2cc_visual separately. " +
+            "Returns structured results showing which checks passed/failed.",
         inputSchema: {
             type: "object",
             properties: {
@@ -23,9 +23,9 @@ const TOOLS = [
                     type: "string",
                     description: "Project root directory (defaults to cwd)",
                 },
-                skipVisual: {
+                includeVisual: {
                     type: "boolean",
-                    description: "Skip visual regression (Playwright not required)",
+                    description: "Include visual regression check (slow, 5-10min). Default: false.",
                 },
             },
         },
