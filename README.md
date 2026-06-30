@@ -202,6 +202,29 @@ The prototype HTML file is the single source of truth. d2cc extracts CSS classes
 
 d2cc includes an MCP server for agent integration. Agents can invoke verification during implementation, catching drift before it compounds.
 
+Available tools:
+- `d2cc_verify` — run all checks (CSS sync + structural + skeleton + visual)
+- `d2cc_css_sync` — CSS custom property and class sync
+- `d2cc_structural` — required tokens and patterns
+- `d2cc_skeleton` — extract component skeletons from prototype
+- `d2cc_visual` — multi-screen Playwright screenshots and comparisons
+
+### MCP setup by platform
+
+**OpenCode** — add to `opencode.json`:
+```json
+{
+  "mcp": {
+    "d2cc": {
+      "type": "local",
+      "command": ["npx", "d2cc", "mcp"],
+      "enabled": true
+    }
+  }
+}
+```
+
+**Claude Code** — add to `.mcp.json` in your project root:
 ```json
 {
   "mcpServers": {
@@ -213,12 +236,32 @@ d2cc includes an MCP server for agent integration. Agents can invoke verificatio
 }
 ```
 
-Available tools:
-- `d2cc_verify` — run all checks (CSS sync + structural + skeleton + visual)
-- `d2cc_css_sync` — CSS custom property and class sync
-- `d2cc_structural` — required tokens and patterns
-- `d2cc_skeleton` — extract component skeletons from prototype
-- `d2cc_visual` — multi-screen Playwright screenshots and comparisons
+**Cursor** — add to `.cursor/mcp.json`:
+```json
+{
+  "mcpServers": {
+    "d2cc": {
+      "command": "npx",
+      "args": ["d2cc", "mcp"]
+    }
+  }
+}
+```
+
+**Claude Desktop** — add to `~/Library/Application Support/Claude/claude_desktop_config.json` (macOS) or `%APPDATA%\Claude\claude_desktop_config.json` (Windows):
+```json
+{
+  "mcpServers": {
+    "d2cc": {
+      "command": "npx",
+      "args": ["d2cc", "mcp"],
+      "cwd": "/path/to/your/project"
+    }
+  }
+}
+```
+
+> **Note:** MCP servers are loaded at startup. After adding the config, restart your agent/IDE for the `d2cc_*` tools to appear.
 
 ## Agent Skills
 

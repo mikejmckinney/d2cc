@@ -191,25 +191,11 @@ For JSON output:
 
 ## MCP Server
 
-d2cc includes an MCP server for agent integration:
+d2cc includes an MCP server with 5 tools (`d2cc_verify`, `d2cc_css_sync`, `d2cc_structural`, `d2cc_skeleton`, `d2cc_visual`).
 
-```json
-{
-  "mcpServers": {
-    "d2cc": {
-      "command": "npx",
-      "args": ["d2cc", "mcp"]
-    }
-  }
-}
-```
+MCP setup format varies by platform (OpenCode, Claude Code, Cursor, Claude Desktop). See the [MCP Server section of the README](https://github.com/mikejmckinney/d2cc#mcp-server) for platform-specific config examples.
 
-Available tools:
-- `d2cc_verify` — run all checks (CSS sync + structural + skeleton + visual)
-- `d2cc_css_sync` — CSS custom property and class sync
-- `d2cc_structural` — required tokens and patterns
-- `d2cc_skeleton` — HTML structure extraction
-- `d2cc_visual` — multi-screen Playwright screenshots
+> MCP servers are loaded at startup. After adding the config, restart your agent/IDE for the tools to appear. You do NOT need MCP to use d2cc — the CLI (`npx d2cc verify`) works independently.
 
 ## API usage
 
