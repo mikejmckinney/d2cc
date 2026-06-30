@@ -146,17 +146,10 @@ export async function startMcpServer() {
     let buffer = "";
     process.stdin.setEncoding("utf-8");
     process.stdin.resume();
-    // Save the real stdout write before overriding — MCP responses must go to stdout
-    const realStdoutWrite = process.stdout.write.bind(process.stdout);
-    process.stdout.write = (chunk) => {
-        const str = typeof chunk === "string" ? chunk : new TextDecoder().decode(chunk);
-        process.stderr.write(`[d2cc-mcp] tx: ${str.trimEnd()}\n`);
-        return realStdoutWrite(chunk);
-    };
     const send = (response) => {
         const msg = JSON.stringify(response);
         const body = `Content-Length: ${Buffer.byteLength(msg)}\r\n\r\n${msg}`;
-        realStdoutWrite(body);
+        process.stdout.write(body);
     };
     const handleRequest = async (req) => {
         switch (req.method) {
@@ -203,44 +196,44 @@ export async function startMcpServer() {
     };
     process.stdin.on("data", (chunk) => {
         buffer += chunk;
-        // Parse Content-Length framed messages
-        while (true) {
+        // Parse Content-Length framed messages, with raw JSON fallback
+        while (buffer.length > 0) {
             const headerEnd = buffer.indexOf("\r\n\r\n");
-            if (headerEnd === -1)
-                break;
-            const header = buffer.slice(0, headerEnd);
-            const match = header.match(/Content-Length:\s*(\d+)/i);
-            if (!match) {
-                // Try parsing as raw JSON (some clients skip framing)
-                const newlineIdx = buffer.indexOf("\n");
-                if (newlineIdx === -1)
-                    break;
-                const line = buffer.slice(0, newlineIdx).trim();
-                buffer = buffer.slice(newlineIdx + 1);
-                if (line) {
+            if (headerEnd !== -1) {
+                const header = buffer.slice(0, headerEnd);
+                const match = header.match(/Content-Length:\s*(\d+)/i);
+                if (match) {
+                    const contentLength = parseInt(match[1], 10);
+                    const bodyStart = headerEnd + 4;
+                    const totalLength = bodyStart + contentLength;
+                    if (Buffer.byteLength(buffer, "utf-8") < totalLength)
+                        break;
+                    const body = buffer.slice(bodyStart, totalLength);
+                    buffer = buffer.slice(totalLength);
                     try {
-                        const req = JSON.parse(line);
+                        const req = JSON.parse(body);
                         handleRequest(req).catch((err) => process.stderr.write(`[d2cc-mcp] error: ${err}\n`));
                     }
-                    catch {
-                        // skip non-JSON lines
+                    catch (err) {
+                        process.stderr.write(`[d2cc-mcp] parse error: ${err}\n`);
                     }
+                    continue;
                 }
-                continue;
             }
-            const contentLength = parseInt(match[1], 10);
-            const bodyStart = headerEnd + 4;
-            const totalLength = bodyStart + contentLength;
-            if (Buffer.byteLength(buffer, "utf-8") < totalLength)
+            // Try raw JSON line (no Content-Length framing)
+            const newlineIdx = buffer.indexOf("\n");
+            if (newlineIdx === -1)
                 break;
-            const body = buffer.slice(bodyStart, totalLength);
-            buffer = buffer.slice(totalLength);
-            try {
-                const req = JSON.parse(body);
-                handleRequest(req).catch((err) => process.stderr.write(`[d2cc-mcp] error: ${err}\n`));
-            }
-            catch (err) {
-                process.stderr.write(`[d2cc-mcp] parse error: ${err}\n`);
+            const line = buffer.slice(0, newlineIdx).trim();
+            buffer = buffer.slice(newlineIdx + 1);
+            if (line) {
+                try {
+                    const req = JSON.parse(line);
+                    handleRequest(req).catch((err) => process.stderr.write(`[d2cc-mcp] error: ${err}\n`));
+                }
+                catch {
+                    // skip non-JSON lines
+                }
             }
         }
     });
