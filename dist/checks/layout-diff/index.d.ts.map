@@ -1,0 +1,1 @@
+{"version":3,"file":"index.d.ts","sourceRoot":"","sources":["../../../src/checks/layout-diff/index.ts"],"names":[],"mappings":"AAQA,OAAO,KAAK,EAAE,cAAc,EAAE,MAAM,qBAAqB,CAAC;AAE1D,OAAO,KAAK,EAAE,WAAW,EAAe,MAAM,qBAAqB,CAAC;AAkDpE,wBAAsB,aAAa,CACjC,MAAM,EAAE,cAAc,EACtB,WAAW,EAAE,MAAM,EACnB,YAAY,EAAE,MAAM,EACpB,cAAc,EAAE,MAAM,GACrB,OAAO,CAAC,WAAW,CAAC,CAgFtB"}

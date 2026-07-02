@@ -1,7 +1,7 @@
 // design-to-code-contract — Visual diff
 // Compares prototype to implementation via Playwright screenshots,
 // multi-screen navigation with step sequences, seed data injection,
-// and CSS class name diffing.
+// computed layout property diffing, and CSS class name diffing.
 // SPDX-License-Identifier: MIT
 import { readFileSync, existsSync, mkdirSync, readdirSync } from "node:fs";
 import { resolve, join } from "node:path";
@@ -21,9 +21,7 @@ async function hasPlaywright() {
         return false;
     }
 }
-function sleep(ms) {
-    return new Promise((r) => setTimeout(r, ms));
-}
+function sleep(ms) { return new Promise((r) => setTimeout(r, ms)); }
 async function waitForServer(url, timeoutMs) {
     const start = Date.now();
     while (Date.now() - start < timeoutMs) {
@@ -32,7 +30,7 @@ async function waitForServer(url, timeoutMs) {
             if (res.status < 500)
                 return true;
         }
-        catch { /* not ready */ }
+        catch { }
         await sleep(1000);
     }
     return false;
@@ -41,7 +39,6 @@ function parseCommand(cmd) {
     const parts = cmd.trim().split(/\s+/);
     return [parts[0], parts.slice(1)];
 }
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
 async function dismissOverlays(page) {
     for (const text of ["I understand", "Accept", "Close", "Dismiss", "OK", "Got it", "Start new", "Cancel"]) {
         try {
@@ -51,38 +48,28 @@ async function dismissOverlays(page) {
                 await sleep(400);
             }
         }
-        catch { /* no overlay */ }
+        catch { }
     }
 }
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
 async function clickElement(page, text, timeout = 10000) {
     if (/^[.#\[]/.test(text) || /^(button|a|div|span|input|select|label)\b/.test(text) || text.includes('>>')) {
         try {
             await page.locator(text).first().click({ timeout: Math.min(timeout, 5000) });
             return true;
         }
-        catch { /* selector not found */ }
+        catch { }
     }
     const perSelectorTimeout = Math.min(timeout / 4, 3000);
-    const selectors = [
-        `button:has-text("${text}")`,
-        `[title="${text}"]`,
-        `a:has-text("${text}")`,
-        `[aria-label="${text}"]`,
-    ];
-    for (const selector of selectors) {
+    for (const sel of [`button:has-text("${text}")`, `[title="${text}"]`, `a:has-text("${text}")`, `[aria-label="${text}"]`]) {
         try {
-            await page.locator(selector).first().click({ timeout: perSelectorTimeout });
+            await page.locator(sel).first().click({ timeout: perSelectorTimeout });
             return true;
         }
-        catch { /* try next */ }
+        catch { }
     }
     return false;
 }
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-async function executeStep(
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-page, step, url, customStepFiles, projectRoot) {
+async function executeStep(page, step, url, customStepFiles, projectRoot) {
     if (step.dismiss) {
         try {
             const btn = page.locator(`button:has-text("${step.dismiss}")`).first();
@@ -91,13 +78,11 @@ page, step, url, customStepFiles, projectRoot) {
                 await sleep(500);
             }
         }
-        catch { /* no modal */ }
+        catch { }
     }
     if (step.custom) {
-        // Custom steps are project-specific — skip silently on prototype side
-        if (!customStepFiles || !projectRoot) {
+        if (!customStepFiles || !projectRoot)
             return true;
-        }
         const fileRel = customStepFiles[step.custom];
         if (!fileRel) {
             console.log(`    [visual] custom step "${step.custom}" not found in visual.customStepFiles`);
@@ -108,7 +93,7 @@ page, step, url, customStepFiles, projectRoot) {
             console.log(`    [visual] custom step file not found: ${fileAbs}`);
             return false;
         }
-        const fileContents = readFileSync(fileAbs, "utf-8");
+        const fileContents = readFileSync(fileAbs, { encoding: "utf-8" });
         try {
             await page.evaluate(fileContents);
             await sleep(500);
@@ -136,7 +121,7 @@ page, step, url, customStepFiles, projectRoot) {
                 waited = true;
                 break;
             }
-            catch { /* try next */ }
+            catch { }
         }
         if (!waited) {
             console.log(`    [visual] waitFor all selectors timed out: ${JSON.stringify(waitForList)}`);
@@ -145,16 +130,12 @@ page, step, url, customStepFiles, projectRoot) {
     }
     if (step.waitForText) {
         try {
-            for (const textSel of [
-                `text="${step.waitForText}"`,
-                `:text("${step.waitForText}")`,
-                `:has-text("${step.waitForText}")`,
-            ]) {
+            for (const textSel of [`text="${step.waitForText}"`, `:text("${step.waitForText}")`, `:has-text("${step.waitForText}")`]) {
                 try {
                     await page.locator(textSel).first().waitFor({ state: "visible", timeout: 5000 });
                     break;
                 }
-                catch { /* try next */ }
+                catch { }
             }
         }
         catch {
@@ -189,7 +170,6 @@ page, step, url, customStepFiles, projectRoot) {
     }
     return true;
 }
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
 async function navigateAndCapture(page, url, outputDir, prefix, viewportName, screen, isFirstLoad, customStepFiles, projectRoot) {
     const outPath = join(outputDir, `${prefix}-${viewportName}-${screen.name}.png`);
     if (isFirstLoad) {
@@ -212,33 +192,82 @@ async function navigateAndCapture(page, url, outputDir, prefix, viewportName, sc
         try {
             await page.locator('button').first().waitFor({ state: "visible", timeout: 15000 });
         }
-        catch { /* no buttons rendered yet */ }
+        catch { }
         await sleep(1000);
     }
     await sleep(500);
     await page.screenshot({ path: outPath, fullPage: true });
     return outPath;
 }
-async function createComparison(
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
-playwright, protoPath, reactPath, outputPath, viewportWidth) {
+async function seedIndexedDB(page) {
+    await page.evaluate(() => {
+        return new Promise((resolve, reject) => {
+            const request = indexedDB.open("cctc-app", 1);
+            request.onerror = () => reject(new Error("Failed to open IndexedDB"));
+            request.onsuccess = () => {
+                const db = request.result;
+                const now = Date.now();
+                const day = 86400000;
+                const entries = [
+                    { id: "seed-0", completedAt: new Date(now - 18 * day).toISOString(), settings: { blueprintId: "cctc-from-2026-07", questionSet: "standard", questionCount: 24, timed: true, timeMinutes: 180, showTimer: true, mode: "exam", includeDrafts: false, targetThreshold: 70 }, timeUsedSeconds: 1800, itemIds: [], items: [], answers: {}, flaggedForReview: [], result: { correct: 15, total: 24, percent: 62, estimatedPass: true, breakdown: [{ categoryId: "1", categoryLabel: "Education", correct: 5, total: 8 }, { categoryId: "2", categoryLabel: "Pre-transplant", correct: 5, total: 8 }, { categoryId: "3", categoryLabel: "Post-op", correct: 5, total: 8 }] } },
+                    { id: "seed-1", completedAt: new Date(now - 12 * day).toISOString(), settings: { blueprintId: "cctc-from-2026-07", questionSet: "standard", questionCount: 24, timed: true, timeMinutes: 180, showTimer: true, mode: "exam", includeDrafts: false, targetThreshold: 70 }, timeUsedSeconds: 2400, itemIds: [], items: [], answers: {}, flaggedForReview: [], result: { correct: 16, total: 24, percent: 66, estimatedPass: true, breakdown: [{ categoryId: "1", categoryLabel: "Education", correct: 5, total: 8 }, { categoryId: "2", categoryLabel: "Pre-transplant", correct: 6, total: 8 }, { categoryId: "3", categoryLabel: "Post-op", correct: 5, total: 8 }] } },
+                    { id: "seed-2", completedAt: new Date(now - 6 * day).toISOString(), settings: { blueprintId: "cctc-from-2026-07", questionSet: "standard", questionCount: 24, timed: false, timeMinutes: 180, showTimer: true, mode: "study", includeDrafts: false, targetThreshold: 70 }, timeUsedSeconds: null, itemIds: [], items: [], answers: {}, flaggedForReview: [], result: { correct: 16, total: 24, percent: 67, estimatedPass: true, breakdown: [{ categoryId: "1", categoryLabel: "Education", correct: 5, total: 8 }, { categoryId: "2", categoryLabel: "Pre-transplant", correct: 5, total: 8 }, { categoryId: "3", categoryLabel: "Post-op", correct: 6, total: 8 }] } },
+                ];
+                const flags = [{ id: "flag-seed-0", item_id: "cctc-1001", version: 1, status: "reviewed", reason: "typo / wording", comment: "Sample flag for visual testing", session_id: "seed-0", blueprint: "cctc-from-2026-07", mode: "exam", createdAt: new Date(now - 2 * day).toISOString(), updatedAt: new Date(now - 2 * day).toISOString() }];
+                const tx = db.transaction(["history", "flags"], "readwrite");
+                for (const entry of entries) {
+                    tx.objectStore("history").put(entry);
+                }
+                for (const flag of flags) {
+                    tx.objectStore("flags").put(flag);
+                }
+                tx.oncomplete = () => resolve();
+                tx.onerror = () => reject(new Error("Failed to seed IndexedDB"));
+            };
+        });
+    });
+}
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+async function extractLayoutProps(page) {
+    return page.evaluate(() => {
+        const cs = (el, prop) => {
+            if (!el)
+                return "N/A";
+            // eslint-disable-next-line @typescript-eslint/no-explicit-any
+            const val = getComputedStyle(el)[prop];
+            return val != null ? String(val) : "N/A";
+        };
+        const elements = {
+            header: document.querySelector("header, .app-header"),
+            headerInner: document.querySelector(".app-header__inner"),
+            nav: document.querySelector("nav, .app-header__nav"),
+            shell: document.querySelector(".shell"),
+            mainGrid: document.querySelector(".main-grid, .dashboard-grid"),
+            card: document.querySelector(".card, .card--panel"),
+            insight: document.querySelector(".readiness-insight"),
+            expCard: document.querySelector(".explanation-card"),
+            focusTrack: document.querySelector(".focus-bar-track"),
+            optionLetter: document.querySelector(".option-letter"),
+            quickCard: document.querySelector(".quick-card"),
+        };
+        const props = {};
+        for (const [name, el] of Object.entries(elements)) {
+            props[`${name}.padding`] = cs(el, "padding");
+            props[`${name}.gap`] = cs(el, "gap");
+            props[`${name}.borderRadius`] = cs(el, "borderRadius");
+            props[`${name}.width`] = cs(el, "maxWidth");
+        }
+        return props;
+    });
+}
+async function createComparison(playwright, protoPath, reactPath, outputPath, viewportWidth) {
     if (!existsSync(protoPath) || !existsSync(reactPath))
         return null;
     try {
         const protoData = readFileSync(protoPath).toString("base64");
         const reactData = readFileSync(reactPath).toString("base64");
-        const html = `<!DOCTYPE html>
-<html>
-<head><style>
-body { margin: 0; display: flex; font-family: system-ui, sans-serif; background: #1a1a1a; }
-.col { flex: 1; display: flex; flex-direction: column; }
-.col img { width: 100%; height: auto; }
-.label { background: #333; color: #fff; padding: 8px 12px; font-size: 13px; font-weight: 600; text-align: center; }
-</style></head>
-<body>
-<div class="col"><div class="label">Prototype</div><img src="data:image/png;base64,${protoData}"></div>
-<div class="col"><div class="label">Implementation</div><img src="data:image/png;base64,${reactData}"></div>
-</body></html>`;
+        const html = `<!DOCTYPE html><html><head><style>body{margin:0;display:flex;font-family:system-ui,sans-serif;background:#1a1a1a}.col{flex:1;display:flex;flex-direction:column}.col img{width:100%;height:auto}.label{background:#333;color:#fff;padding:8px 12px;font-size:13px;font-weight:600;text-align:center}</style></head><body><div class="col"><div class="label">Prototype</div><img src="data:image/png;base64,${protoData}"></div><div class="col"><div class="label">Implementation</div><img src="data:image/png;base64,${reactData}"></div></body></html>`;
         const browser = await playwright.chromium.launch();
         const ctx = await browser.newContext({ viewport: { width: viewportWidth * 2, height: 800 } });
         const page = await ctx.newPage();
@@ -248,8 +277,7 @@ body { margin: 0; display: flex; font-family: system-ui, sans-serif; background:
         return outputPath;
     }
     catch (e) {
-        const msg = e instanceof Error ? e.message : String(e);
-        console.error(`    [visual] comparison failed: ${msg.slice(0, 200)}`);
+        console.error(`    [visual] comparison failed: ${e.message?.slice(0, 200)}`);
         return null;
     }
 }
@@ -261,10 +289,9 @@ function extractPrototypeCssClasses(protoPath) {
     const styleRegex = /<style[^>]*>([\s\S]*?)<\/style>/gi;
     let styleMatch;
     while ((styleMatch = styleRegex.exec(html)) !== null) {
-        const block = styleMatch[1];
         const classRegex = /\.([a-zA-Z][a-zA-Z0-9_-]*)/g;
         let classMatch;
-        while ((classMatch = classRegex.exec(block)) !== null) {
+        while ((classMatch = classRegex.exec(styleMatch[1])) !== null) {
             classes.add(classMatch[1]);
         }
     }
@@ -279,41 +306,31 @@ function classInSource(className, srcDir, skipList) {
         for (const dir of [compDir, appDir]) {
             if (!existsSync(dir))
                 continue;
-            const files = readdirSync(dir).filter((f) => f.endsWith(".tsx") || f.endsWith(".ts"));
-            for (const f of files) {
-                const content = readFileSync(join(dir, f), "utf-8");
-                if (content.includes(className))
+            for (const f of readdirSync(dir).filter((f) => f.endsWith(".tsx") || f.endsWith(".ts"))) {
+                if (readFileSync(join(dir, f), "utf-8").includes(className))
                     return true;
             }
         }
     }
-    catch { /* dir read failed */ }
+    catch { }
     return false;
 }
 export async function runVisual(config, projectRoot) {
     const checkName = "Visual Regression";
-    if (config.visual?.enabled === false) {
+    if (config.visual?.enabled === false)
         return suite(checkName, [], true, "disabled in config");
-    }
     const protoPath = resolve(projectRoot, config.prototype);
     const srcDir = resolve(projectRoot, config.implementation.src);
     const outputDir = resolve(projectRoot, config.visual?.outputDir ?? "visual-regression");
     const serverUrl = config.visual?.serverUrl ?? "http://localhost:5173";
     const devCommand = config.visual?.devCommand;
     const serverTimeout = config.visual?.serverTimeout ?? 30000;
-    const viewports = config.visual?.viewports ?? [
-        { name: "desktop", width: 940, height: 800 },
-        { name: "mobile", width: 390, height: 844 },
-    ];
+    const viewports = config.visual?.viewports ?? [{ name: "desktop", width: 940, height: 800 }, { name: "mobile", width: 390, height: 844 }];
     const screens = config.visual?.screens ?? DEFAULT_SCREENS;
     const customStepFiles = config.visual?.customStepFiles;
-    const skipList = new Set([
-        ...(config.globalSkipList ?? []),
-        ...(config.visual?.skipClasses ?? []),
-    ]);
-    if (!existsSync(protoPath)) {
+    const skipList = new Set([...(config.globalSkipList ?? []), ...(config.visual?.skipClasses ?? [])]);
+    if (!existsSync(protoPath))
         return suite(checkName, [], true, `prototype not found: ${protoPath}`);
-    }
     const checks = [];
     const screenshotsTaken = [];
     const comparisonsCreated = [];
@@ -329,7 +346,7 @@ export async function runVisual(config, projectRoot) {
             if (res.status < 500)
                 serverReady = true;
         }
-        catch { /* not running */ }
+        catch { }
         if (!serverReady && devCommand) {
             const [cmd, args] = parseCommand(devCommand);
             try {
@@ -349,9 +366,7 @@ export async function runVisual(config, projectRoot) {
             const protoDir = protoPath.replace(/[^/\\]+$/, "");
             const protoFileName = protoPath.replace(/^.*[/\\]/, "");
             const protoServerUrl = "http://localhost:9876";
-            protoServer = spawn("npx", ["http-server", protoDir, "-p", "9876", "-s", "--cors"], {
-                cwd: projectRoot, stdio: "ignore", detached: true,
-            });
+            protoServer = spawn("npx", ["http-server", protoDir, "-p", "9876", "-s", "--cors"], { cwd: projectRoot, stdio: "ignore", detached: true });
             let protoReady = await waitForServer(protoServerUrl, 15000);
             if (!protoReady) {
                 try {
@@ -359,9 +374,7 @@ export async function runVisual(config, projectRoot) {
                         process.kill(-protoServer.pid, "SIGTERM");
                 }
                 catch { }
-                protoServer = spawn("python3", ["-m", "http.server", "9876"], {
-                    cwd: protoDir, stdio: "ignore", detached: true,
-                });
+                protoServer = spawn("python3", ["-m", "http.server", "9876"], { cwd: protoDir, stdio: "ignore", detached: true });
                 protoReady = await waitForServer(protoServerUrl, 8000);
             }
             if (!protoReady) {
@@ -373,14 +386,13 @@ export async function runVisual(config, projectRoot) {
                 catch { }
                 protoServer = null;
             }
+            // ─── Screenshots ─────────────────────────────────────────────
             for (const vp of viewports) {
                 // Capture prototype screens
                 const pBrowser = await playwright.chromium.launch();
                 const pCtx = await pBrowser.newContext({ viewport: { width: vp.width, height: vp.height } });
                 const pPage = await pCtx.newPage();
-                const protoUrl = protoReady
-                    ? `${protoServerUrl}/${protoFileName.replace(/ /g, "%20")}`
-                    : `file://${protoPath.replace(/ /g, "%20")}`;
+                const protoUrl = protoReady ? `${protoServerUrl}/${protoFileName.replace(/ /g, "%20")}` : `file://${protoPath.replace(/ /g, "%20")}`;
                 for (let i = 0; i < screens.length; i++) {
                     const result = await navigateAndCapture(pPage, protoUrl, outputDir, "proto", vp.name, screens[i], i === 0);
                     if (result)
@@ -397,7 +409,7 @@ export async function runVisual(config, projectRoot) {
                         screenshotsTaken.push(result);
                 }
                 await rBrowser.close();
-                // Create side-by-side comparisons (Playwright-based, no ImageMagick)
+                // Create side-by-side comparisons
                 for (const screen of screens) {
                     const protoImg = join(outputDir, `proto-${vp.name}-${screen.name}.png`);
                     const reactImg = join(outputDir, `react-${vp.name}-${screen.name}.png`);
@@ -407,6 +419,72 @@ export async function runVisual(config, projectRoot) {
                         comparisonsCreated.push(result);
                 }
             }
+            // ─── Layout Diff ─────────────────────────────────────────────
+            try {
+                const layoutFailures = [];
+                const layoutChecks = [];
+                for (const screen of screens) {
+                    // Launch prototype browser
+                    const lpBrowser = await playwright.chromium.launch();
+                    const lpCtx = await lpBrowser.newContext({ viewport: { width: 1280, height: 800 }, colorScheme: "light" });
+                    const lp = await lpCtx.newPage();
+                    const protoUrl = protoReady ? `${protoServerUrl}/${protoFileName.replace(/ /g, "%20")}` : `file://${protoPath.replace(/ /g, "%20")}`;
+                    await lp.goto(protoUrl, { waitUntil: "networkidle", timeout: 30000 });
+                    await sleep(3000);
+                    try {
+                        await lp.locator('button:has-text("I understand")').first().click({ timeout: 5000 });
+                        await sleep(1000);
+                    }
+                    catch { }
+                    // Navigate to this screen
+                    const protoSteps = screen.steps ?? (screen.navText ? [{ click: screen.navText }] : []);
+                    for (const step of protoSteps) {
+                        await executeStep(lp, step, protoUrl, customStepFiles, projectRoot);
+                    }
+                    await sleep(1000);
+                    const protoLayout = await extractLayoutProps(lp);
+                    await lp.close();
+                    await lpBrowser.close();
+                    // Launch React browser
+                    const lrBrowser = await playwright.chromium.launch();
+                    const lrCtx = await lrBrowser.newContext({ viewport: { width: 1280, height: 800 } });
+                    const lrPage = await lrCtx.newPage();
+                    await lrPage.goto(serverUrl, { waitUntil: "networkidle", timeout: 30000 });
+                    await sleep(3000);
+                    try {
+                        await lrPage.locator('button:has-text("I understand")').first().click({ timeout: 5000 });
+                        await sleep(1000);
+                    }
+                    catch { }
+                    const reactSteps = screen.steps ?? (screen.navText ? [{ click: screen.navText }] : []);
+                    for (const step of reactSteps) {
+                        await executeStep(lrPage, step, serverUrl, customStepFiles, projectRoot);
+                    }
+                    await sleep(1000);
+                    const reactLayout = await extractLayoutProps(lrPage);
+                    await lrPage.close();
+                    await lrBrowser.close();
+                    // Diff layout properties
+                    for (const key of Object.keys(protoLayout)) {
+                        if (protoLayout[key] === "N/A" || reactLayout[key] === "N/A")
+                            continue;
+                        const match = protoLayout[key] === reactLayout[key];
+                        layoutChecks.push(check(`layout:${screen.name}:${key}`, checkName, match, match ? `${screen.name} ${key} matches` : `${screen.name} ${key} mismatch: proto="${protoLayout[key]}" react="${reactLayout[key]}"`));
+                        if (!match)
+                            layoutFailures.push(`${screen.name} ${key}: proto="${protoLayout[key]}" react="${reactLayout[key]}"`);
+                    }
+                }
+                if (layoutFailures.length > 0)
+                    console.log(`\n  [layout-diff] ${layoutFailures.length} layout mismatches: ${layoutFailures.join(", ")}`);
+                layoutChecks.push(check("visual:layout-diff", checkName, layoutFailures.length === 0, layoutFailures.length === 0
+                    ? `All layout properties match across ${screens.length} screens`
+                    : `${layoutFailures.length} layout mismatches found`, layoutFailures.length === 0 ? "info" : "error"));
+                checks.push(...layoutChecks);
+            }
+            catch (e) {
+                checks.push(check("visual:layout-error", checkName, false, `Layout diff failed: ${e.message}`));
+            }
+            // ─── Summary ────────────────────────────────────────────────
             checks.push(check("visual:screenshots", checkName, screenshotsTaken.length > 0, screenshotsTaken.length > 0
                 ? `${screenshotsTaken.length} screenshots across ${screens.length} screens × ${viewports.length} viewports → ${outputDir}/`
                 : "No screenshots captured (Playwright may need: npx playwright install chromium)", screenshotsTaken.length > 0 ? "info" : "warning"));
@@ -424,7 +502,7 @@ export async function runVisual(config, projectRoot) {
     else {
         checks.push(check("visual:screenshots", checkName, false, "Playwright not installed — screenshots skipped (run: npx playwright install chromium)", "warning"));
     }
-    // DOM class diff (always runs)
+    // DOM class diff (always runs, no dependencies)
     const protoClasses = extractPrototypeCssClasses(protoPath);
     const missing = [];
     for (const cls of protoClasses) {
@@ -445,7 +523,7 @@ export async function runVisual(config, projectRoot) {
                 if (srv.pid)
                     process.kill(-srv.pid, "SIGTERM");
             }
-            catch { /* already dead */ }
+            catch { }
         }
     }
     return suite(checkName, checks);
